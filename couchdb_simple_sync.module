@@ -1,0 +1,147 @@
+<?php
+/*
+* Reference, see:
+* https://www.drupal.org/node/2052067
+*/
+
+/**
+* Implements hook_action_info()
+*/
+function couchdb_simple_sync_action_info() {
+    return array(
+      'couchdb_simple_sync_mirror_to_couchdb_action' => array(
+        'type' => 'node',
+        'label' => t('Espejar nodo en CouchDB'),
+        'behavior' => array(),
+        'configurable' => FALSE,
+        'vbo_configurable' => FALSE,
+        'triggers' => array('any'),
+      )
+    );
+}
+
+/**
+* VBO Action to sync a node to couchdb
+*/
+function couchdb_simple_sync_mirror_to_couchdb_action(&$node, $context) {
+
+  _cmec_bulk_mirror_to_couchdb_sync_node($node);
+
+}
+
+function couchdb_simple_sync_mirror_to_couchdb_action_form($options) {
+  $form = array();
+  return $form;
+}
+
+function couchdb_simple_sync_mirror_to_couchdb_action_submit($form, &$form_state) {
+  $return = array();
+  return $return;
+}
+
+/**
+* Construct base URL to query CouchDB
+*/
+function _cmec_bulk_mirror_to_couchdb_base_url() {
+
+  $host = variable_get('couchdb_host', 'localhost');
+  $port = variable_get('couchdb_port', '5984');
+
+  $user = variable_get('couchdb_user', '');
+  $pass = variable_get('couchdb_pass', '');
+
+  $protocol = variable_get('couchdb_protocol', 'http');
+
+  $url = $protocol . '://';
+  $url .= $host;
+  $url .= empty($port) ? '' : ':' . $port;
+  $url .= '/';
+
+  return $url;
+}
+
+function _cmec_bulk_mirror_to_couchdb_db_url($database) {
+  $url = _cmec_bulk_mirror_to_couchdb_base_url();
+  $prefix = variable_get('couchdb_prefix', 'ssync_');
+
+  $url .= $prefix . $database;
+
+  return $url;
+}
+
+function _cmec_bulk_mirror_to_couchdb_doc_url($database, $uuid) {
+  $url = _cmec_bulk_mirror_to_couchdb_db_url($database);
+
+  $url .= '/' . $uuid;
+
+  return $url;
+}
+
+/**
+* SYNC
+*/
+function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
+
+  // Exists database for content-type of node?
+  $url = _cmec_bulk_mirror_to_couchdb_db_url( $node->type );
+  $options = [];
+  $options['method'] = 'GET';
+  $response = drupal_http_request($url, $options);
+
+  if($response->code !== '200') {
+    // CREAR LA BD para el tipo de contenido, si no existe
+    $url = _cmec_bulk_mirror_to_couchdb_db_url( $node->type );
+    $options = [];
+    $options['method'] = 'PUT';
+
+    $response = drupal_http_request($url, $options);
+
+    if($response->code !== '201') {
+      watchdog('cmec_bulk_operation', 'Unexpected response', NULL, WATCHDOG_WARNING);
+      watchdog('cmec_bulk_operation', print_r($response, true), NULL, WATCHDOG_WARNING);
+
+      // Stop everything
+      return;
+    }
+  }
+
+  // LEER el nodo en COUCHDB
+  $url = _cmec_bulk_mirror_to_couchdb_doc_url( $node->type, $node->uuid );
+  $options = [];
+  $options['method'] = 'GET';
+  $response = drupal_http_request($url, $options);
+  $uuid = isset($node->uuid) ? $node->uuid : sha1($node->nid);
+
+  if($response->code === '200') {
+    try {
+      $rjson = json_decode($response->data);
+
+      $node->_rev = $rjson->_rev;
+
+    } catch(Exception $e) {
+      watchdog('cmec_bulk_operation', 'JSON can\'t be decoded. ', NULL, WATCHDOG_ERROR);
+      watchdog('cmec_bulk_operation', print_r($response, true), NULL, WATCHDOG_ERROR);
+    }
+  } else if($response->code !== '404') {
+    watchdog('cmec_bulk_operation', print_r($response, true), NULL, WATCHDOG_ERROR);
+  }
+
+  // ACTUALIZAR el nodo en COUCHDB
+  unset($node->data);
+  unset($node->rdf_mapping);
+
+  $json = json_encode($node);
+
+  $url = _cmec_bulk_mirror_to_couchdb_db_url( $node->type );
+  $url .= '/' .$node->uuid;
+  $options = [];
+  $options['method'] = 'PUT';
+  $options['data'] = $json;
+
+  $response = drupal_http_request($url, $options);
+
+  if($response->code !== '201') {
+    watchdog('cmec_bulk_operation', 'Unexpected response', NULL, WATCHDOG_WARNING);
+    watchdog('cmec_bulk_operation', print_r($response, true), NULL, WATCHDOG_WARNING);
+  }
+}

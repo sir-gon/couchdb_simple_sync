@@ -1,0 +1,6 @@
+name = CouchDB Simple Sync
+description = Sync nodes (one-way) to CouchDB
+core = 7.x
+; package =
+; dependencies[] = views_bulk_operations
+dependencies[] = uuid
