@@ -62,6 +62,34 @@ function _cmec_bulk_mirror_to_couchdb_base_url() {
   return $url;
 }
 
+/**
+* Construct base URL to query CouchDB
+*/
+function _cmec_bulk_mirror_to_couchdb_admin_base_url($database = '') {
+
+  $host = variable_get('couchdb_host', 'localhost');
+  $port = variable_get('couchdb_port', '5984');
+
+  $user = variable_get('couchdb_admin_user', '');
+  $pass = variable_get('couchdb_admin_password', '');
+
+  $protocol = variable_get('couchdb_protocol', 'http');
+
+  $url = $protocol . '://';
+  $url .= empty($user) ? '' : $user;
+  $url .= empty($pass) ? '' : ':' . $pass;
+  $url .= empty($user) ? '' : '@';
+
+  $url .= $host;
+  $url .= empty($port) ? '' : ':' . $port;
+  $url .= '/';
+
+  $prefix = variable_get('couchdb_prefix', 'ssync_');
+  $url .= empty($database) ? '' : $prefix . $database;
+
+  return $url;
+}
+
 function _cmec_bulk_mirror_to_couchdb_db_url($database) {
   $url = _cmec_bulk_mirror_to_couchdb_base_url();
   $prefix = variable_get('couchdb_prefix', 'ssync_');
@@ -92,13 +120,30 @@ function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
 
   if($response->code !== '200') {
     // CREAR LA BD para el tipo de contenido, si no existe
-    $url = _cmec_bulk_mirror_to_couchdb_db_url( $node->type );
+    $url = _cmec_bulk_mirror_to_couchdb_admin_base_url( $node->type );
     $options = [];
     $options['method'] = 'PUT';
 
     $response = drupal_http_request($url, $options);
 
-    if($response->code !== '201') {
+    if($response->code === '201') {
+      // Try to set write restriction only for an authenticated regular user
+
+      $securityDoc = new stdClass();
+      $securityDoc->_id = '_design/security';
+      $securityDoc->validate_doc_update = "function(new_doc,doc,userCtx) { if(!userCtx || userCtx.name != 'cmec') {throw({forbidden: 'Bad user'})}}";
+      $json = json_encode($securityDoc);
+
+      $url = _cmec_bulk_mirror_to_couchdb_admin_base_url( $node->type );
+      $url .= '/_design/security';
+
+      $options = [];
+      $options['method'] = 'PUT';
+      $options['data'] = $json;
+
+      $response = drupal_http_request($url, $options);
+
+    } else {
       watchdog('cmec_bulk_operation', 'Unexpected response', NULL, WATCHDOG_WARNING);
       watchdog('cmec_bulk_operation', print_r($response, true), NULL, WATCHDOG_WARNING);
 
@@ -134,8 +179,7 @@ function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
 
   $json = json_encode($node);
 
-  $url = _cmec_bulk_mirror_to_couchdb_db_url( $node->type );
-  $url .= '/' .$node->uuid;
+  $url = _cmec_bulk_mirror_to_couchdb_doc_url( $node->type, $node->uuid );
   $options = [];
   $options['method'] = 'PUT';
   $options['data'] = $json;
