@@ -24,9 +24,7 @@ function couchdb_simple_sync_action_info() {
 * VBO Action to sync a node to couchdb
 */
 function couchdb_simple_sync_mirror_to_couchdb_action(&$node, $context) {
-
   _cmec_bulk_mirror_to_couchdb_sync_node($node);
-
 }
 
 function couchdb_simple_sync_mirror_to_couchdb_action_form($options) {
@@ -48,11 +46,15 @@ function _cmec_bulk_mirror_to_couchdb_base_url() {
   $port = variable_get('couchdb_port', '5984');
 
   $user = variable_get('couchdb_user', '');
-  $pass = variable_get('couchdb_pass', '');
+  $pass = variable_get('couchdb_password', '');
 
   $protocol = variable_get('couchdb_protocol', 'http');
 
   $url = $protocol . '://';
+  $url .= empty($user) ? '' : $user;
+  $url .= empty($pass) ? '' : ':' . $pass;
+  $url .= empty($user) ? '' : '@';
+
   $url .= $host;
   $url .= empty($port) ? '' : ':' . $port;
   $url .= '/';
@@ -105,7 +107,7 @@ function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
     }
   }
 
-  // LEER el nodo en COUCHDB
+  // LEER el nodo en COUCHDB (para obtener revision)
   $url = _cmec_bulk_mirror_to_couchdb_doc_url( $node->type, $node->uuid );
   $options = [];
   $options['method'] = 'GET';
@@ -126,7 +128,7 @@ function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
     watchdog('cmec_bulk_operation', print_r($response, true), NULL, WATCHDOG_ERROR);
   }
 
-  // ACTUALIZAR el nodo en COUCHDB
+  // ACTUALIZAR el nodo en COUCHDB (usar revision anterior)
   unset($node->data);
   unset($node->rdf_mapping);
 
