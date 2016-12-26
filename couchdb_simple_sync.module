@@ -24,7 +24,6 @@ function couchdb_simple_sync_action_info() {
 * VBO Action to sync a node to couchdb
 */
 function couchdb_simple_sync_mirror_to_couchdb_action(&$node, $context) {
-  dpm($node);
   _cmec_bulk_mirror_to_couchdb_sync_node($node);
 }
 
@@ -63,8 +62,6 @@ function couchdb_simple_sync_node_insert($node) {
   unset($node->rdf_mapping);
   unset($node->log);
 
-  //dpm($node);
-
   _cmec_bulk_mirror_to_couchdb_sync_node($node);
 }
 
@@ -88,8 +85,6 @@ function couchdb_simple_sync_node_update($node) {
   unset($node->xmlsitemap);
   unset($node->rdf_mapping);
   unset($node->log);
-
-  //dpm($node);
 
   _cmec_bulk_mirror_to_couchdb_sync_node($node);
 }
@@ -235,7 +230,7 @@ function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
   unset($node->original);
   unset($node->data);
   unset($node->xmlsitemap);
-  unset($node->rdf_mapping);  
+  unset($node->rdf_mapping);
   unset($node->log);
 
   $json = drupal_json_encode($node);
@@ -254,11 +249,6 @@ function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
   $response = drupal_http_request($url, $options);
 
   if($response->code !== '201') {
-    dpm($url);
-    dpm($options);
-    dpm($json);
-    dpm($response);
-
     watchdog('cmec_bulk_operation', 'Unexpected response', NULL, WATCHDOG_WARNING);
     watchdog('cmec_bulk_operation', print_r($response, true), NULL, WATCHDOG_WARNING);
   }
