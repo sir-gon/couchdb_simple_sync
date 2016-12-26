@@ -21,6 +21,32 @@ function couchdb_simple_sync_action_info() {
 }
 
 /**
+* Implements hook_rules_action_info()
+* Add a Rules Action to sync node to CouchDB
+*/
+function couchdb_simple_sync_rules_action_info() {
+  return array(
+    'couchdb_simple_sync_mirror_node_to_couchdb_action' => array(
+      'label' => t('Mirror node as JSON document to CouchDB'),
+      'group' => t('CouchDB Simple Sync'),
+      'parameter' => array(
+        'node' => array(
+          'type' => 'node',
+          'label' => 'Target node',
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+* Rule Action for rules module 
+*/
+function couchdb_simple_sync_mirror_node_to_couchdb_action($node){
+  _cmec_bulk_mirror_to_couchdb_sync_node($node);
+}
+
+/**
 * VBO Action to sync a node to couchdb
 */
 function couchdb_simple_sync_mirror_to_couchdb_action(&$node, $context) {
