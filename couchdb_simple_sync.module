@@ -8,42 +8,16 @@
 * Implements hook_action_info()
 */
 function couchdb_simple_sync_action_info() {
-    return array(
-      'couchdb_simple_sync_mirror_to_couchdb_action' => array(
-        'type' => 'node',
-        'label' => t('Espejar nodo en CouchDB'),
-        'behavior' => array(),
-        'configurable' => FALSE,
-        'vbo_configurable' => FALSE,
-        'triggers' => array('any'),
-      )
-    );
-}
-
-/**
-* Implements hook_rules_action_info()
-* Add a Rules Action to sync node to CouchDB
-*/
-function couchdb_simple_sync_rules_action_info() {
   return array(
-    'couchdb_simple_sync_mirror_node_to_couchdb_action' => array(
-      'label' => t('Mirror node as JSON document to CouchDB'),
-      'group' => t('CouchDB Simple Sync'),
-      'parameter' => array(
-        'node' => array(
-          'type' => 'node',
-          'label' => 'Target node',
-        ),
-      ),
-    ),
+    'couchdb_simple_sync_mirror_to_couchdb_action' => array(
+      'type' => 'node',
+      'label' => t('Espejar nodo en CouchDB'),
+      'behavior' => array(),
+      'configurable' => FALSE,
+      'vbo_configurable' => FALSE,
+      'triggers' => array('any'),
+    )
   );
-}
-
-/**
-* Rule Action for rules module 
-*/
-function couchdb_simple_sync_mirror_node_to_couchdb_action($node){
-  _cmec_bulk_mirror_to_couchdb_sync_node($node);
 }
 
 /**
@@ -61,6 +35,58 @@ function couchdb_simple_sync_mirror_to_couchdb_action_form($options) {
 function couchdb_simple_sync_mirror_to_couchdb_action_submit($form, &$form_state) {
   $return = array();
   return $return;
+}
+
+
+
+/**
+ * Implements hook_node_insert().
+ */
+function couchdb_simple_sync_node_insert($node) {
+  // Clear internal properties.
+  unset($node->is_new);
+  unset($node->original);
+
+  // Clear the static loading cache.
+  entity_get_controller('node')->resetCache(array($node->nid));
+
+  // SYNC
+  // Reload node because entity_load can parse BLOB properties and fields
+  // If not, then it could cause a JSON encoding error
+  $node = entity_load('node', array($node->nid) );
+  $node = array_pop($node);
+
+  // Clear more properties.
+  unset($node->data);
+  unset($node->xmlsitemap);
+  unset($node->rdf_mapping);
+  unset($node->log);
+
+  _cmec_bulk_mirror_to_couchdb_sync_node($node);
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function couchdb_simple_sync_node_update($node) {
+  // Clear internal properties.
+  unset($node->is_new);
+  unset($node->original);
+
+  // Clear the static loading cache.
+  entity_get_controller('node')->resetCache(array($node->nid));
+
+  // SYNC
+  $node = entity_load('node', array($node->nid) );
+  $node = array_pop($node);
+
+  // Clear more properties.
+  unset($node->data);
+  unset($node->xmlsitemap);
+  unset($node->rdf_mapping);
+  unset($node->log);
+
+  _cmec_bulk_mirror_to_couchdb_sync_node($node);
 }
 
 /**
@@ -173,7 +199,7 @@ function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
       watchdog('cmec_bulk_operation', 'Unexpected response', NULL, WATCHDOG_WARNING);
       watchdog('cmec_bulk_operation', print_r($response, true), NULL, WATCHDOG_WARNING);
 
-      // Stop everything
+      // Can't continue
       return;
     }
   }
@@ -200,10 +226,20 @@ function _cmec_bulk_mirror_to_couchdb_sync_node(&$node) {
   }
 
   // ACTUALIZAR el nodo en COUCHDB (usar revision anterior)
+  unset($node->is_new);
+  unset($node->original);
   unset($node->data);
+  unset($node->xmlsitemap);
   unset($node->rdf_mapping);
+  unset($node->log);
 
-  $json = json_encode($node);
+  $json = drupal_json_encode($node);
+  if(!$json)
+  {
+    watchdog('cmec_bulk_operation', 'JSON Error: ' .  json_last_error_msg(), NULL, WATCHDOG_ERROR);
+    // Can't continue
+    return;
+  }
 
   $url = _cmec_bulk_mirror_to_couchdb_doc_url( $node->type, $node->uuid );
   $options = [];
