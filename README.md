@@ -13,6 +13,8 @@ $conf['couchdb_protocol'] = 'http'; // http or https
 $conf['couchdb_prefix'] = 'ssync_'; // prefix for couchdb database names
 $conf['couchdb_user'] = '';
 $conf['couchdb_password'] = '';
+$conf['couchdb_admin_user'] = '';
+$conf['couchdb_admin_password'] = '';
 ```
 
 # Security
